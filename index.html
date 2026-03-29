@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PromptForge — Genera Prompt Dinamici</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --neon-orange: #FF5C00;
+    --neon-red: #FF1A1A;
+    --amber: #FF8C00;
+    --gold: #FFB800;
+    --dark: #0D0A08;
+    --dark3: #231A0E;
+    --glass: rgba(255,92,0,0.08);
+    --glass-border: rgba(255,92,0,0.18);
+    --text-main: #FFF8F0;
+    --text-muted: rgba(255,248,240,0.5);
+    --text-dim: rgba(255,248,240,0.28);
+    --radius: 18px;
+    --radius-sm: 10px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--dark);
+    color: var(--text-main);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 60% 50% at 10% 20%, rgba(255,92,0,0.18) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 40% at 90% 80%, rgba(255,26,26,0.14) 0%, transparent 55%),
+      radial-gradient(ellipse 30% 30% at 50% 50%, rgba(255,140,0,0.07) 0%, transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    opacity: 0.4; pointer-events: none; z-index: 0;
+  }
+
+  .wrap { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+  /* NAV */
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 20px 0 10px; }
+  .logo { font-family: 'Syne', sans-serif; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.03em; display: flex; align-items: center; gap: 10px; }
+  .logo-icon { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, var(--neon-orange), var(--neon-red)); display: flex; align-items: center; justify-content: center; font-size: 1rem; box-shadow: 0 0 18px rgba(255,92,0,0.55); }
+  .logo-text { background: linear-gradient(90deg, var(--neon-orange), var(--gold)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .nav-badge { font-size: 0.68rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; padding: 5px 12px; border-radius: 99px; border: 1px solid var(--glass-border); background: var(--glass); color: var(--amber); backdrop-filter: blur(8px); }
+
+  /* API BANNER */
+  .api-banner {
+    margin: 16px 0 20px;
+    background: rgba(26,18,8,0.8);
+    border: 1px solid rgba(255,92,0,0.25);
+    border-radius: var(--radius);
+    padding: 18px 22px;
+    display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap;
+    backdrop-filter: blur(16px);
+    animation: fadeUp .5s ease both;
+  }
+
+  .api-banner.connected { border-color: rgba(80,200,80,0.3); background: rgba(10,26,10,0.7); }
+
+  .api-icon { font-size: 1.6rem; flex-shrink: 0; margin-top: 2px; }
+
+  .api-info { flex: 1; min-width: 180px; }
+  .api-title { font-family: 'Syne', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--amber); margin-bottom: 3px; }
+  .api-banner.connected .api-title { color: #7ddc7d; }
+  .api-sub { font-size: 0.74rem; color: var(--text-dim); line-height: 1.5; }
+  .api-sub a { color: var(--amber); text-decoration: none; }
+  .api-sub a:hover { text-decoration: underline; }
+
+  .api-status { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 0.72rem; color: var(--text-dim); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #555; flex-shrink: 0; }
+  .dot.ok { background: #7ddc7d; box-shadow: 0 0 8px rgba(125,220,125,0.6); animation: pulse 2s ease-in-out infinite; }
+  .dot.err { background: var(--neon-red); }
+
+  .api-controls { display: flex; gap: 9px; align-items: center; flex: 2; min-width: 260px; flex-wrap: wrap; }
+
+  .api-wrap { position: relative; flex: 1; min-width: 200px; }
+  .api-wrap input {
+    width: 100%; padding: 10px 38px 10px 13px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,92,0,0.2);
+    border-radius: var(--radius-sm);
+    color: var(--text-main);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.82rem; letter-spacing: 0.04em;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .api-wrap input:focus { outline: none; border-color: var(--neon-orange); box-shadow: 0 0 0 3px rgba(255,92,0,0.12); }
+
+  .eye { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.9rem; padding: 2px; transition: color .2s; }
+  .eye:hover { color: var(--amber); }
+
+  .api-save { padding: 10px 18px; border-radius: var(--radius-sm); border: none; cursor: pointer; font-family: 'Syne', sans-serif; font-size: 0.82rem; font-weight: 700; background: linear-gradient(135deg, var(--neon-orange), var(--neon-red)); color: #fff; box-shadow: 0 0 16px rgba(255,92,0,0.35); transition: all .2s; white-space: nowrap; }
+  .api-save:hover { transform: translateY(-1px); box-shadow: 0 0 24px rgba(255,92,0,0.5); }
+
+  .api-clear { padding: 10px 13px; border-radius: var(--radius-sm); border: 1px solid rgba(255,92,0,0.2); background: transparent; cursor: pointer; font-size: 0.82rem; color: var(--text-dim); font-family: 'DM Sans', sans-serif; transition: all .2s; }
+  .api-clear:hover { border-color: rgba(255,92,0,0.4); color: var(--text-muted); }
+
+  /* HERO */
+  .hero { text-align: center; padding: 28px 0 24px; animation: fadeUp .6s ease both; }
+  .hero-tag { display: inline-flex; align-items: center; gap: 8px; font-size: 0.72rem; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--amber); background: rgba(255,140,0,0.1); border: 1px solid rgba(255,140,0,0.2); padding: 6px 16px; border-radius: 99px; margin-bottom: 20px; }
+  .hero-tag .dot-live { width: 6px; height: 6px; border-radius: 50%; background: var(--neon-orange); display: inline-block; animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{ opacity:1; transform:scale(1); } 50%{ opacity:.5; transform:scale(.7); } }
+  h1 { font-family: 'Syne', sans-serif; font-size: clamp(2rem,5.5vw,3.8rem); font-weight: 800; line-height: 1.05; letter-spacing: -0.04em; margin-bottom: 14px; }
+  h1 em { font-style: normal; background: linear-gradient(90deg, var(--neon-orange) 0%, var(--neon-red) 50%, var(--gold) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero-sub { font-size: 0.98rem; color: var(--text-muted); max-width: 480px; margin: 0 auto; line-height: 1.6; font-weight: 300; }
+
+  /* STATS */
+  .stats-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 18px; animation: fadeUp .6s .1s ease both; }
+  .stat-box { background: rgba(255,92,0,0.06); border: 1px solid rgba(255,92,0,0.12); border-radius: var(--radius-sm); padding: 13px 12px; text-align: center; }
+  .stat-num { font-family: 'Syne', sans-serif; font-size: 1.5rem; font-weight: 800; color: var(--neon-orange); line-height: 1; }
+  .stat-lbl { font-size: 0.67rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.07em; margin-top: 3px; }
+
+  /* MODES */
+  .mode-bar { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 0 0 20px; animation: fadeUp .6s .2s ease both; }
+  .mode-btn { display: flex; align-items: center; gap: 7px; padding: 9px 18px; border-radius: 99px; border: 1px solid var(--glass-border); background: transparent; color: var(--text-muted); font-family: 'DM Sans', sans-serif; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all .22s; backdrop-filter: blur(6px); white-space: nowrap; }
+  .mode-btn:hover { border-color: rgba(255,92,0,0.4); color: var(--text-main); background: rgba(255,92,0,0.07); }
+  .mode-btn.active { background: linear-gradient(135deg, var(--neon-orange), var(--neon-red)); border-color: transparent; color: #fff; box-shadow: 0 0 24px rgba(255,92,0,0.45), 0 4px 14px rgba(0,0,0,0.3); }
+
+  /* GRID */
+  .main-grid { display: grid; grid-template-columns: 1fr 370px; gap: 20px; align-items: start; animation: fadeUp .6s .3s ease both; }
+  @media (max-width: 840px) { .main-grid { grid-template-columns: 1fr; } }
+
+  /* PANEL */
+  .panel { background: rgba(26,18,8,0.72); border: 1px solid var(--glass-border); border-radius: var(--radius); backdrop-filter: blur(16px); overflow: hidden; transition: border-color .3s; }
+  .panel:hover { border-color: rgba(255,92,0,0.3); }
+  .panel-head { padding: 17px 22px 13px; border-bottom: 1px solid rgba(255,92,0,0.1); display: flex; align-items: center; justify-content: space-between; }
+  .panel-title { font-family: 'Syne', sans-serif; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--amber); }
+  .panel-body { padding: 20px 22px; }
+
+  /* FIELDS */
+  .field { margin-bottom: 17px; }
+  .field-label { font-size: 0.78rem; font-weight: 500; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; }
+  .field-hint { font-size: 0.7rem; color: var(--text-dim); }
+
+  textarea, input[type="text"], select {
+    width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,92,0,0.15); border-radius: var(--radius-sm); color: var(--text-main); font-family: 'DM Sans', sans-serif; font-size: 0.9rem; padding: 11px 13px; transition: border-color .2s, box-shadow .2s; resize: none; -webkit-appearance: none;
+  }
+  textarea:focus, input:focus, select:focus { outline: none; border-color: var(--neon-orange); box-shadow: 0 0 0 3px rgba(255,92,0,0.12); }
+  textarea { min-height: 108px; line-height: 1.6; }
+  select option { background: var(--dark3); }
+
+  /* CHIPS */
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .chip { padding: 6px 13px; border-radius: 99px; border: 1px solid rgba(255,92,0,0.18); background: transparent; color: var(--text-muted); font-family: 'DM Sans', sans-serif; font-size: 0.78rem; font-weight: 500; cursor: pointer; transition: all .2s; }
+  .chip:hover { border-color: rgba(255,92,0,0.4); color: var(--text-main); }
+  .chip.sel { background: rgba(255,92,0,0.18); border-color: var(--neon-orange); color: var(--neon-orange); }
+
+  /* SLIDERS */
+  .slider-val { font-size: 0.78rem; color: var(--amber); font-weight: 600; margin-left: auto; }
+  input[type=range] { -webkit-appearance: none; width: 100%; height: 4px; background: rgba(255,92,0,0.15); border-radius: 99px; outline: none; border: none; padding: 0; cursor: pointer; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(135deg, var(--neon-orange), var(--neon-red)); box-shadow: 0 0 10px rgba(255,92,0,0.6); cursor: pointer; transition: transform .15s; }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+  /* TOGGLES */
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .toggle-label { font-size: 0.83rem; color: var(--text-muted); }
+  .toggle { position: relative; width: 40px; height: 22px; border-radius: 99px; background: rgba(255,255,255,0.08); cursor: pointer; transition: background .25s; border: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; }
+  .toggle.on { background: var(--neon-orange); border-color: var(--neon-orange); box-shadow: 0 0 12px rgba(255,92,0,0.4); }
+  .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .25s cubic-bezier(.4,0,.2,1); box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+  .toggle.on::after { transform: translateX(18px); }
+
+  .divider { height: 1px; background: rgba(255,92,0,0.1); margin: 16px 0; }
+
+  /* GEN BTN */
+  .gen-btn { width: 100%; padding: 15px; border-radius: var(--radius-sm); border: none; cursor: pointer; font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700; background: linear-gradient(135deg, var(--neon-orange), var(--neon-red)); color: #fff; box-shadow: 0 0 32px rgba(255,92,0,0.4), 0 8px 24px rgba(0,0,0,0.3); transition: all .22s; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 6px; }
+  .gen-btn:hover { transform: translateY(-2px); box-shadow: 0 0 48px rgba(255,92,0,0.55), 0 12px 28px rgba(0,0,0,0.35); }
+  .gen-btn:active { transform: translateY(0); }
+  .gen-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+  .gen-btn .spin { animation: spin .7s linear infinite; display: none; }
+  .gen-btn.loading .spin { display: inline-block; }
+  .gen-btn.loading .btn-txt { display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* OUTPUT */
+  .output-panel { position: relative; }
+  .loader-overlay { position: absolute; inset: 0; border-radius: inherit; background: rgba(13,10,8,0.65); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 10; flex-direction: column; gap: 12px; }
+  .loader-overlay.active { display: flex; }
+  .loader-ring { width: 36px; height: 36px; border-radius: 50%; border: 3px solid rgba(255,92,0,0.15); border-top-color: var(--neon-orange); animation: spin .8s linear infinite; }
+  .loader-txt { font-size: 0.8rem; color: var(--amber); }
+
+  #output-text { background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,92,0,0.15); border-radius: var(--radius-sm); padding: 20px; min-height: 200px; font-size: 0.92rem; line-height: 1.75; color: var(--text-muted); white-space: pre-wrap; word-break: break-word; transition: all .3s; font-style: italic; }
+  #output-text.has { color: var(--text-main); font-style: normal; border-color: rgba(255,92,0,0.25); background: rgba(255,92,0,0.04); }
+
+  .cursor { display: inline-block; width: 2px; height: 1em; background: var(--neon-orange); margin-left: 2px; animation: blink .7s step-end infinite; vertical-align: text-bottom; }
+  @keyframes blink { 0%,100%{ opacity:1; } 50%{ opacity:0; } }
+
+  .output-actions { display: flex; gap: 9px; flex-wrap: wrap; margin-top: 14px; }
+  .act-btn { display: flex; align-items: center; gap: 7px; padding: 9px 15px; border-radius: var(--radius-sm); border: 1px solid var(--glass-border); background: transparent; color: var(--text-muted); font-family: 'DM Sans', sans-serif; font-size: 0.82rem; font-weight: 500; cursor: pointer; transition: all .2s; }
+  .act-btn:hover { border-color: rgba(255,92,0,0.4); color: var(--text-main); background: rgba(255,92,0,0.07); }
+  .act-btn.accent { border-color: var(--neon-orange); color: var(--neon-orange); }
+
+  /* SIDEBAR ITEMS */
+  .hist-item { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,92,0,0.1); border-radius: var(--radius-sm); padding: 11px 14px; cursor: pointer; transition: all .2s; margin-bottom: 8px; }
+  .hist-item:last-child { margin-bottom: 0; }
+  .hist-item:hover { border-color: rgba(255,92,0,0.3); background: rgba(255,92,0,0.05); }
+  .hist-mode { font-size: 0.67rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--amber); margin-bottom: 3px; }
+  .hist-text { font-size: 0.81rem; color: var(--text-muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+  #history-list { max-height: 260px; overflow-y: auto; }
+  #history-list::-webkit-scrollbar { width: 4px; }
+  #history-list::-webkit-scrollbar-thumb { background: rgba(255,92,0,0.2); border-radius: 99px; }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(20px); background: rgba(26,18,8,0.95); border: 1px solid rgba(255,92,0,0.3); backdrop-filter: blur(16px); border-radius: 99px; padding: 10px 22px; font-size: 0.83rem; color: var(--amber); opacity: 0; transition: all .3s; pointer-events: none; z-index: 100; white-space: nowrap; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  footer { text-align: center; padding: 36px 0 24px; font-size: 0.74rem; color: var(--text-dim); }
+  footer strong { color: var(--text-muted); }
+
+  @keyframes fadeUp { from { opacity:0; transform: translateY(20px); } to { opacity:1; transform: translateY(0); } }
+
+  @media (max-width: 600px) {
+    h1 { font-size: 2rem; }
+    .api-controls { flex-direction: column; }
+    .api-wrap { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- NAV -->
+  <nav>
+    <div class="logo">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">PromptForge</span>
+    </div>
+    <div class="nav-badge">✦ Standalone</div>
+  </nav>
+
+  <!-- STATUS BANNER -->
+  <div class="api-banner connected" id="api-banner">
+    <div class="api-icon">⚡</div>
+    <div class="api-info">
+      <div class="api-title">PromptForge — Pronto all'uso</div>
+      <div class="api-sub">
+        Powered by <strong>Claude AI</strong> · Nessuna chiave API richiesta — tutto gestito in sicurezza dal server.
+      </div>
+      <div class="api-status">
+        <div class="dot ok" id="api-dot"></div>
+        <span id="api-status-txt">Connesso e pronto</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-tag"><span class="dot-live"></span> Generatore di Prompt con AI</div>
+    <h1>Forgia i tuoi<br><em>Prompt Perfetti</em></h1>
+    <p class="hero-sub">Scegli una modalità e genera prompt professionali in pochi secondi. Nessuna configurazione richiesta.</p>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-row">
+    <div class="stat-box"><div class="stat-num" id="s-gen">0</div><div class="stat-lbl">Generati</div></div>
+    <div class="stat-box"><div class="stat-num" id="s-copy">0</div><div class="stat-lbl">Copiati</div></div>
+    <div class="stat-box"><div class="stat-num" id="s-save">0</div><div class="stat-lbl">Salvati</div></div>
+  </div>
+
+  <!-- MODES -->
+  <div class="mode-bar">
+    <button class="mode-btn active" data-mode="creativo">🎨 Creativo</button>
+    <button class="mode-btn" data-mode="tecnico">⚙️ Tecnico</button>
+    <button class="mode-btn" data-mode="business">📈 Business</button>
+    <button class="mode-btn" data-mode="educativo">📚 Educativo</button>
+    <button class="mode-btn" data-mode="storytelling">✍️ Storytelling</button>
+    <button class="mode-btn" data-mode="debug">🐛 Debug</button>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+
+    <div style="display:flex;flex-direction:column;gap:20px;">
+
+      <!-- CONFIG PANEL -->
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">⚙ Configurazione</div>
+          <div style="font-size:.72rem;color:var(--text-dim);">Modalità: <span id="mode-label" style="color:var(--amber);">Creativo</span></div>
+        </div>
+        <div class="panel-body">
+          <div class="field">
+            <div class="field-label">Descrivi il tuo obiettivo <span class="field-hint" id="char-count">0 / 400</span></div>
+            <textarea id="topic" maxlength="400" placeholder="Es. Voglio creare una campagna social per il lancio di un prodotto sostenibile rivolto ai giovani..."></textarea>
+          </div>
+          <div class="field">
+            <div class="field-label">Contesto aggiuntivo <span class="field-hint">opzionale</span></div>
+            <input type="text" id="context" placeholder="Es. target 18-25 anni, tono energico, brand eco-friendly">
+          </div>
+          <div class="field">
+            <div class="field-label">Tono</div>
+            <div class="chips">
+              <button class="chip sel" data-tone="professionale">Professionale</button>
+              <button class="chip" data-tone="creativo">Creativo</button>
+              <button class="chip" data-tone="amichevole">Amichevole</button>
+              <button class="chip" data-tone="formale">Formale</button>
+              <button class="chip" data-tone="ironico">Ironico</button>
+              <button class="chip" data-tone="empatico">Empatico</button>
+              <button class="chip" data-tone="persuasivo">Persuasivo</button>
+            </div>
+          </div>
+          <div class="field">
+            <div class="field-label">Lunghezza output <span class="slider-val" id="len-val">Media</span></div>
+            <input type="range" id="len-slider" min="1" max="3" value="2" step="1">
+            <div style="display:flex;justify-content:space-between;margin-top:5px;">
+              <span style="font-size:.7rem;color:var(--text-dim);">Breve</span>
+              <span style="font-size:.7rem;color:var(--text-dim);">Media</span>
+              <span style="font-size:.7rem;color:var(--text-dim);">Lunga</span>
+            </div>
+          </div>
+          <div class="field">
+            <div class="field-label">Creatività <span class="slider-val" id="temp-val">70%</span></div>
+            <input type="range" id="temp-slider" min="0" max="100" value="70" step="5">
+          </div>
+          <div class="divider"></div>
+          <div class="toggle-row">
+            <div class="toggle-label">🔁 Includi varianti alternative</div>
+            <div class="toggle" id="t-variants" onclick="this.classList.toggle('on')"></div>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-label">📌 Aggiungi istruzioni di formato</div>
+            <div class="toggle on" id="t-format" onclick="this.classList.toggle('on')"></div>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-label">🌍 Output in italiano</div>
+            <div class="toggle on" id="t-lang" onclick="this.classList.toggle('on')"></div>
+          </div>
+          <button class="gen-btn" id="gen-btn" onclick="generate()">
+            <span class="btn-txt">⚡ Genera Prompt</span>
+            <span class="spin">↻</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- OUTPUT PANEL -->
+      <div class="panel output-panel">
+        <div class="panel-head">
+          <div class="panel-title">✦ Prompt Generato</div>
+          <div id="out-badge" style="font-size:.7rem;color:var(--text-dim);"></div>
+        </div>
+        <div class="loader-overlay" id="loader">
+          <div class="loader-ring"></div>
+          <div class="loader-txt">Forgiando il prompt…</div>
+        </div>
+        <div class="panel-body">
+          <div id="output-text">Il tuo prompt apparirà qui dopo aver premuto "Genera Prompt"…</div>
+          <div class="output-actions">
+            <button class="act-btn accent" onclick="copyPrompt()">📋 Copia</button>
+            <button class="act-btn" onclick="savePrompt()">🔖 Salva .txt</button>
+            <button class="act-btn" onclick="refine()">✨ Migliora</button>
+            <button class="act-btn" onclick="clearOut()">🗑 Svuota</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- SIDEBAR -->
+    <div style="display:flex;flex-direction:column;gap:20px;">
+
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">🗂 Template rapidi</div></div>
+        <div class="panel-body" style="padding-bottom:14px;">
+          <div class="hist-item" onclick="applyTpl('Social media post per campagna estiva di un brand di moda sostenibile','creativo','ironico')">
+            <div class="hist-mode">🎨 Creativo</div>
+            <div class="hist-text">Social media post — brand di moda</div>
+          </div>
+          <div class="hist-item" onclick="applyTpl('Spiega come funziona una rete neurale a uno studente delle superiori','educativo','amichevole')">
+            <div class="hist-mode">📚 Educativo</div>
+            <div class="hist-text">Reti neurali — studente superiori</div>
+          </div>
+          <div class="hist-item" onclick="applyTpl('Analisi SWOT di una startup nel settore fintech','business','professionale')">
+            <div class="hist-mode">📈 Business</div>
+            <div class="hist-text">Analisi SWOT — startup fintech</div>
+          </div>
+          <div class="hist-item" onclick="applyTpl('Scrivi il primo capitolo di un romanzo distopico ambientato nel 2084','storytelling','creativo')">
+            <div class="hist-mode">✍️ Storytelling</div>
+            <div class="hist-text">Romanzo distopico — 2084</div>
+          </div>
+          <div class="hist-item" onclick="applyTpl('Trova il bug in questo codice Python e spiega la soluzione passo passo','debug','formale')">
+            <div class="hist-mode">🐛 Debug</div>
+            <div class="hist-text">Debug Python — spiega soluzione</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">🕐 Cronologia</div>
+          <button onclick="clearHist()" style="background:none;border:none;color:var(--text-dim);font-size:.72rem;cursor:pointer;">Svuota</button>
+        </div>
+        <div class="panel-body">
+          <div id="history-list"><div style="font-size:.82rem;color:var(--text-dim);text-align:center;padding:14px 0;">Nessun prompt ancora</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">💡 Tip</div></div>
+        <div class="panel-body"><p style="font-size:.83rem;color:var(--text-muted);line-height:1.65;" id="tip"></p></div>
+      </div>
+
+    </div>
+  </div>
+
+  <footer>
+    ⚡ <strong>PromptForge</strong> — Powered by Claude AI · La tua chiave API non è mai esposta.
+  </footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── STATE ──
+let mode = 'creativo', tone = 'professionale';
+let gC = 0, cpC = 0, svC = 0;
+let hist = [], lastPrompt = '';
+
+const TIPS = [
+  "Più sei specifico nell'obiettivo, più il prompt sarà mirato ed efficace.",
+  "Usa il campo 'Contesto' per indicare il pubblico del tuo prompt.",
+  "La modalità 'Debug' è ottima per analisi critica di codice.",
+  "Tono 'Persuasivo' + modalità 'Business' = prompt ad alto impatto commerciale.",
+  "Salva i prompt migliori come .txt e usali come base per iterazioni future.",
+  "Aumentare la creatività genera varianti più sorprendenti ma meno prevedibili.",
+  "I template rapidi sono punti di partenza: personalizzali sempre.",
+];
+
+document.getElementById('tip').textContent = TIPS[Math.floor(Math.random() * TIPS.length)];
+
+// ── INIT ──
+;(function init() {
+  document.getElementById('topic').addEventListener('input', function() {
+    document.getElementById('char-count').textContent = this.value.length + ' / 400';
+  });
+
+  document.getElementById('len-slider').addEventListener('input', function() {
+    document.getElementById('len-val').textContent = ['Breve','Media','Lunga'][this.value - 1];
+  });
+
+  document.getElementById('temp-slider').addEventListener('input', function() {
+    document.getElementById('temp-val').textContent = this.value + '%';
+  });
+
+  document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    mode = b.dataset.mode;
+    document.getElementById('mode-label').textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+  }));
+
+  document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+    document.querySelectorAll('.chip').forEach(x => x.classList.remove('sel'));
+    c.classList.add('sel');
+    tone = c.dataset.tone;
+  }));
+})();
+
+function setStatus(ok, msg) {
+  document.getElementById('api-dot').className = 'dot ' + (ok ? 'ok' : 'err');
+  document.getElementById('api-status-txt').textContent = msg;
+  document.getElementById('api-banner').className = 'api-banner' + (ok ? ' connected' : '');
+}
+
+// ── CALL CLAUDE (via server proxy) ──
+async function callClaude(system, userMsg) {
+  const res = await fetch('/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ system, userMsg })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `Errore HTTP ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data.text || '';
+}
+
+// ── GENERATE ──
+async function generate() {
+  const topic = document.getElementById('topic').value.trim();
+  if (!topic) { toast('⚠️ Inserisci l\'obiettivo'); return; }
+
+  const ctx = document.getElementById('context').value.trim();
+  const len = ['breve (2-3 frasi)','media (1-2 paragrafi)','lunga e dettagliata'][document.getElementById('len-slider').value - 1];
+  const temp = document.getElementById('temp-slider').value;
+  const variants = document.getElementById('t-variants').classList.contains('on');
+  const fmt = document.getElementById('t-format').classList.contains('on');
+  const ita = document.getElementById('t-lang').classList.contains('on');
+
+  setLoading(true);
+
+  const sys = `Sei un esperto generatore di prompt AI. Crei prompt precisi, efficaci e contestualmente appropriati.
+Rispondi SOLO con il prompt generato — nessuna spiegazione, nessun prefisso come "Ecco il prompt:".
+${ita ? 'Genera il prompt in italiano.' : 'Generate the prompt in English.'}`;
+
+  const usr = `Genera un prompt professionale con queste specifiche:
+- MODALITÀ: ${mode}
+- OBIETTIVO: ${topic}
+${ctx ? `- CONTESTO: ${ctx}` : ''}
+- TONO: ${tone}
+- LUNGHEZZA DESIDERATA: ${len}
+- CREATIVITÀ: ${temp}%
+${fmt ? '- Includi istruzioni di formato (elenchi, paragrafi, sezioni)' : ''}
+${variants ? '- Aggiungi 2 varianti alternative brevi alla fine come [Variante A] e [Variante B]' : ''}
+
+Il prompt deve essere direttamente utilizzabile come istruzione per un sistema AI. Fluido, professionale, specifico.`;
+
+  try {
+    const result = await callClaude(sys, usr);
+    lastPrompt = result;
+    gC++; updStats();
+    addHist(result);
+    typewrite(result);
+    document.getElementById('out-badge').textContent = mode + ' · ' + tone;
+    setStatus(true, '✅ Connesso — ultima generazione riuscita');
+  } catch(e) {
+    showOut(`❌ Errore: ${e.message}`, false);
+    toast('❌ ' + e.message);
+  }
+
+  setLoading(false);
+}
+
+// ── REFINE ──
+async function refine() {
+  if (!lastPrompt) { toast('⚠️ Genera prima un prompt'); return; }
+
+  setLoading(true);
+  try {
+    const result = await callClaude(
+      'Sei un esperto di ottimizzazione prompt. Migliora il prompt rendendolo più preciso ed efficace. Rispondi SOLO con il prompt migliorato.',
+      'Migliora questo prompt:\n\n' + lastPrompt
+    );
+    lastPrompt = result;
+    gC++; updStats();
+    addHist(result);
+    typewrite(result);
+    toast('✨ Prompt migliorato!');
+  } catch(e) { toast('❌ Errore nel miglioramento'); }
+  setLoading(false);
+}
+
+// ── HELPERS ──
+function setLoading(on) {
+  const btn = document.getElementById('gen-btn');
+  btn.classList.toggle('loading', on);
+  btn.disabled = on;
+  document.getElementById('loader').classList.toggle('active', on);
+}
+
+function showOut(txt, has = true) {
+  const el = document.getElementById('output-text');
+  el.textContent = txt;
+  el.classList.toggle('has', has);
+}
+
+function typewrite(text) {
+  const el = document.getElementById('output-text');
+  el.classList.remove('has');
+  el.innerHTML = '';
+  let i = 0;
+  const cur = document.createElement('span');
+  cur.className = 'cursor';
+  el.appendChild(cur);
+  const iv = setInterval(() => {
+    if (i < text.length) {
+      el.insertBefore(document.createTextNode(text[i++]), cur);
+    } else {
+      clearInterval(iv);
+      cur.remove();
+      el.classList.add('has');
+    }
+  }, 10);
+}
+
+function copyPrompt() {
+  if (!lastPrompt) { toast('⚠️ Nessun prompt'); return; }
+  navigator.clipboard.writeText(lastPrompt).then(() => { cpC++; updStats(); toast('📋 Copiato!'); });
+}
+
+function savePrompt() {
+  if (!lastPrompt) { toast('⚠️ Nessun prompt'); return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([lastPrompt], {type:'text/plain'}));
+  a.download = `prompt-${mode}-${Date.now()}.txt`;
+  a.click();
+  svC++; updStats(); toast('🔖 Salvato come .txt!');
+}
+
+function clearOut() {
+  lastPrompt = '';
+  showOut('Il tuo prompt apparirà qui dopo aver premuto "Genera Prompt"…', false);
+  document.getElementById('out-badge').textContent = '';
+  toast('🗑 Output svuotato');
+}
+
+function addHist(text) {
+  hist.unshift({mode, tone, text});
+  if (hist.length > 8) hist.pop();
+  renderHist();
+}
+
+function renderHist() {
+  const el = document.getElementById('history-list');
+  if (!hist.length) { el.innerHTML = '<div style="font-size:.82rem;color:var(--text-dim);text-align:center;padding:14px 0;">Nessun prompt ancora</div>'; return; }
+  el.innerHTML = hist.map((h,i) => `
+    <div class="hist-item" onclick="loadHist(${i})">
+      <div class="hist-mode">${modeIcon(h.mode)} ${h.mode} · ${h.tone}</div>
+      <div class="hist-text">${h.text}</div>
+    </div>`).join('');
+}
+
+function loadHist(i) { lastPrompt = hist[i].text; typewrite(hist[i].text); toast('🕐 Prompt caricato'); }
+function clearHist() { hist = []; renderHist(); toast('🗑 Cronologia svuotata'); }
+function modeIcon(m) { return {creativo:'🎨',tecnico:'⚙️',business:'📈',educativo:'📚',storytelling:'✍️',debug:'🐛'}[m] || '✦'; }
+
+function applyTpl(topic, m, t) {
+  document.getElementById('topic').value = topic;
+  document.getElementById('char-count').textContent = topic.length + ' / 400';
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+  mode = m;
+  document.getElementById('mode-label').textContent = m.charAt(0).toUpperCase() + m.slice(1);
+  document.querySelectorAll('.chip').forEach(c => c.classList.toggle('sel', c.dataset.tone === t));
+  tone = t;
+  toast('🗂 Template applicato!');
+}
+
+function updStats() {
+  animNum('s-gen', gC); animNum('s-copy', cpC); animNum('s-save', svC);
+}
+
+function animNum(id, val) {
+  const el = document.getElementById(id);
+  let cur = parseInt(el.textContent) || 0;
+  const iv = setInterval(() => { el.textContent = ++cur; if (cur >= val) clearInterval(iv); }, 60);
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2600);
+}
+</script>
+</body>
+</html>
